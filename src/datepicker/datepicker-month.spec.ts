@@ -55,7 +55,7 @@ function expectWeekLabel(element: HTMLElement, weekLabel: string) {
 
 @Injectable()
 class MockDatepickerService extends NgbDatepickerService {
-  getMonth(struct: NgbDateStruct) {
+  getGrid(struct: NgbDateStruct) {
     return {
       firstDate: new NgbDate(2016, 8, 1),
       lastDate: new NgbDate(2016, 8, 31),

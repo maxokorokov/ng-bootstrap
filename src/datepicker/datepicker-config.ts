@@ -19,9 +19,11 @@ export class NgbDatepickerConfig {
   markDisabled: (date: NgbDateStruct, current?: {year: number, month: number}) => boolean;
   minDate: NgbDateStruct;
   maxDate: NgbDateStruct;
+  mode: 'days' | 'months' | 'years' = 'days';
   navigation: 'select' | 'arrows' | 'none' = 'select';
   outsideDays: 'visible' | 'collapsed' | 'hidden' = 'visible';
   showWeekNumbers = false;
   startDate: {year: number, month: number};
   weekdays: TranslationWidth | boolean = TranslationWidth.Short;
+  zoom: 'days' | 'months' | 'years' = 'days';
 }

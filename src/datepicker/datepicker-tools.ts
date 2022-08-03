@@ -1,6 +1,6 @@
 import {NgbDate} from './ngb-date';
-import {DatepickerViewModel, DayViewModel, MonthViewModel} from './datepicker-view-model';
-import {NgbCalendar} from './ngb-calendar';
+import {CellModel, DatepickerViewModel, GridModel, GridMonthContext} from './datepicker-view-model';
+import {NgbCalendar, NgbDatepickerZoom} from './ngb-calendar';
 import {NgbDatepickerI18n} from './datepicker-i18n';
 
 export function isChangedDate(prev?: NgbDate | null, next?: NgbDate | null): boolean {
@@ -96,72 +96,112 @@ export function prevMonthDisabled(calendar: NgbCalendar, date: NgbDate, minDate:
                              prevDate.year < minDate.year && minDate.month === 1);
 }
 
-export function buildMonths(
-    calendar: NgbCalendar, date: NgbDate, state: DatepickerViewModel, i18n: NgbDatepickerI18n,
-    force: boolean): MonthViewModel[] {
-  const {displayMonths, months} = state;
-  // move old months to a temporary array
-  const monthsToReuse = months.splice(0, months.length);
+const ZOOM_LEVELS: NgbDatepickerZoom[] = ['days', 'months', 'years'];
 
-  // generate new first dates, nullify or reuse months
-  const firstDates = Array.from({length: displayMonths}, (_, i) => {
-    const firstDate = Object.assign(calendar.getNext(date, 'm', i), {day: 1});
-    months[i] = <any>null;
+export function zoomIn(zoom: NgbDatepickerZoom): NgbDatepickerZoom {
+  return ZOOM_LEVELS[Math.max(ZOOM_LEVELS.indexOf(zoom) - 1, 0)];
+}
+
+export function zoomOut(zoom: NgbDatepickerZoom): NgbDatepickerZoom {
+  return ZOOM_LEVELS[Math.min(ZOOM_LEVELS.indexOf(zoom) + 1, ZOOM_LEVELS.length - 1)];
+}
+
+export function buildGrids(
+    calendar: NgbCalendar, date: NgbDate, state: DatepickerViewModel, i18n: NgbDatepickerI18n, force: boolean,
+    zoomChange: boolean): GridModel[] {
+    const {displayMonths, grids, zoom} = state;
+    // move old grids to a temporary array, erase everything in case of zoom change
+    const gridsToReuse = zoomChange ? [] : grids.splice(0, grids.length);
+
+    // generate new first dates, nullify or reuse grids
+    // TODO: take zoom level into account
+    const firstDates = Array.from({length: displayMonths}, (_, i) => {
+
+    let firstDate = date;
+
+    switch (zoom) {
+      case 'days':
+          firstDate = Object.assign(calendar.getNext(date, 'm', i), {day: 1});
+        break;
+      case 'months':
+          firstDate = Object.assign(calendar.getNext(date, 'y', i), {month: 1, day: 1});
+        break;
+        case 'years':
+          const [rows, columns] = calendar.getGridForZoom(date, 'years');
+          firstDate = Object.assign(calendar.getNext(date, 'y', i * columns * rows), {month: 1, day: 1});
+        break;
+    }
+
+    grids[i] = <any>null;
 
     if (!force) {
-      const reusedIndex = monthsToReuse.findIndex(month => month.firstDate.equals(firstDate));
-      // move reused month back to months
+      const reusedIndex = gridsToReuse.findIndex(grid => grid.firstDate.equals(firstDate));
+      // move reused month back to grids
       if (reusedIndex !== -1) {
-        months[i] = monthsToReuse.splice(reusedIndex, 1)[0];
+        grids[i] = gridsToReuse.splice(reusedIndex, 1)[0];
       }
     }
 
     return firstDate;
   });
 
-  // rebuild nullified months
+  // rebuild nullified grids
   firstDates.forEach((firstDate, i) => {
-    if (months[i] === null) {
-      months[i] = buildMonth(calendar, firstDate, state, i18n, monthsToReuse.shift() || {} as MonthViewModel);
+    if (grids[i] === null) {
+      switch (state.zoom) {
+        case 'days':
+          grids[i] = buildMonthGrid(calendar, firstDate, state, i18n, gridsToReuse.shift() || {} as GridModel);
+          break;
+        case 'months':
+          grids[i] = buildYearGrid(calendar, firstDate, state, i18n, gridsToReuse.shift() || {} as GridModel);
+          break;
+        case 'years':
+          grids[i] = buildDecadeGrid(calendar, firstDate, state, i18n, gridsToReuse.shift() || {} as GridModel);
+      }
     }
   });
 
-  return months;
+  return grids;
 }
 
-export function buildMonth(
+export function buildMonthGrid(
     calendar: NgbCalendar, date: NgbDate, state: DatepickerViewModel, i18n: NgbDatepickerI18n,
-    month: MonthViewModel = {} as MonthViewModel): MonthViewModel {
-  const {dayTemplateData, minDate, maxDate, firstDayOfWeek, markDisabled, outsideDays, weekdayWidth, weekdaysVisible} =
-      state;
+    grid: GridModel = {} as GridModel): GridModel {
+  const {dayTemplateData, minDate,         maxDate, firstDayOfWeek, markDisabled, outsideDays,
+         weekdayWidth,    weekdaysVisible, zoom} = state;
   const calendarToday = calendar.getToday();
 
-  month.firstDate = <any>null;
-  month.lastDate = <any>null;
-  month.number = date.month;
-  month.year = date.year;
-  month.weeks = month.weeks || [];
-  month.weekdays = month.weekdays || [];
+  grid.firstDate = <any>null;
+  grid.lastDate = <any>null;
+  grid.zoom = 'days';
+  grid.rows = grid.rows || [];
+  grid.context = {
+    month: date.month,
+    year: date.year,
+    weekdays: (grid.context as GridMonthContext)?.weekdays || []
+  }
 
   date = getFirstViewDate(calendar, date, firstDayOfWeek);
 
   // clearing weekdays, if not visible
   if (!weekdaysVisible) {
-    month.weekdays.length = 0;
+    grid.context.weekdays.length = 0;
   }
 
+  const[ROWS, COLUMNS] = calendar.getGridForZoom(date, grid.zoom);
+
   // month has weeks
-  for (let week = 0; week < calendar.getWeeksPerMonth(); week++) {
-    let weekObject = month.weeks[week];
+  for (let week = 0; week < ROWS; week++) {
+    let weekObject = grid.rows[week];
     if (!weekObject) {
-      weekObject = month.weeks[week] = {number: 0, days: [], collapsed: true};
+      weekObject = grid.rows[week] = {cells: [], context: {week}};
     }
-    const days = weekObject.days;
+    const days = weekObject.cells;
 
     // week has days
-    for (let day = 0; day < calendar.getDaysPerWeek(); day++) {
+    for (let day = 0; day < COLUMNS; day++) {
       if (week === 0 && weekdaysVisible) {
-        month.weekdays[day] = i18n.getWeekdayLabel(calendar.getWeekday(date), weekdayWidth);
+        grid.context.weekdays[day] = i18n.getWeekdayLabel(calendar.getWeekday(date), weekdayWidth);
       }
 
       const newDate = new NgbDate(date.year, date.month, date.day);
@@ -172,7 +212,7 @@ export function buildMonth(
       // marking date as disabled
       let disabled = !!((minDate && newDate.before(minDate)) || (maxDate && newDate.after(maxDate)));
       if (!disabled && markDisabled) {
-        disabled = markDisabled(newDate, {month: month.number, year: month.year});
+        disabled = markDisabled(newDate, {month: grid.context.month, year: grid.context.year});
       }
 
       // today
@@ -180,31 +220,32 @@ export function buildMonth(
 
       // adding user-provided data to the context
       let contextUserData =
-          dayTemplateData ? dayTemplateData(newDate, {month: month.number, year: month.year}) : undefined;
+          dayTemplateData ? dayTemplateData(newDate, {month: grid.context.month, year: grid.context.year}) : undefined;
 
       // saving first date of the month
-      if (month.firstDate === null && newDate.month === month.number) {
-        month.firstDate = newDate;
+      if (grid.firstDate === null && newDate.month === grid.context.month) {
+        grid.firstDate = newDate;
       }
 
       // saving last date of the month
-      if (newDate.month === month.number && nextDate.month !== month.number) {
-        month.lastDate = newDate;
+      if (newDate.month === grid.context.month && nextDate.month !== grid.context.month) {
+        grid.lastDate = newDate;
       }
 
       let dayObject = days[day];
       if (!dayObject) {
-        dayObject = days[day] = {} as DayViewModel;
+        dayObject = days[day] = {} as CellModel;
       }
       dayObject.date = newDate;
       dayObject.context = Object.assign(dayObject.context || {}, {
         $implicit: newDate,
         date: newDate,
         data: contextUserData,
-        currentMonth: month.number,
-        currentYear: month.year, disabled,
+        currentMonth: grid.context.month,
+        currentYear: grid.context.year, disabled,
+        parentDate: new NgbDate(grid.context.year, grid.context.month, 1),
         focused: false,
-        selected: false, today
+        selected: false, today, zoom
       });
       dayObject.tabindex = -1;
       dayObject.ariaLabel = ariaLabel;
@@ -213,14 +254,165 @@ export function buildMonth(
       date = nextDate;
     }
 
-    weekObject.number = calendar.getWeekNumber(days.map(day => day.date), firstDayOfWeek);
-
-    // marking week as collapsed
-    weekObject.collapsed = outsideDays === 'collapsed' && days[0].date.month !== month.number &&
-        days[days.length - 1].date.month !== month.number;
+    weekObject.context !.week = calendar.getWeekNumber(days.map(day => day.date), firstDayOfWeek);
   }
 
-  return month;
+  return grid;
+}
+
+export function buildYearGrid(
+    calendar: NgbCalendar, date: NgbDate, state: DatepickerViewModel, i18n: NgbDatepickerI18n,
+    grid: GridModel = {} as GridModel): GridModel {
+  const {dayTemplateData, minDate, maxDate, markDisabled, zoom} = state;
+  const calendarToday = calendar.getToday();
+
+  grid.firstDate = <any>null;
+  grid.lastDate = <any>null;
+  grid.zoom = 'months';
+  grid.rows = grid.rows || [];
+  grid.context = {
+    year: date.year,
+  };
+
+  const[ROWS, COLUMNS] = calendar.getGridForZoom(date, grid.zoom);
+
+  date = getFirstViewMonth(calendar, date);
+
+  // years has month rows
+  for (let row = 0; row < ROWS; row++) {
+    let rowObject = grid.rows[row];
+    if (!rowObject) {
+      rowObject = grid.rows[row] = {cells: []};
+    }
+    const months = rowObject.cells;
+
+    // row has months
+    for (let month = 0; month < COLUMNS; month++) {
+      const newDate = new NgbDate(date.year, date.month, date.day);
+      const nextDate = calendar.getNext(newDate, 'm');
+
+      // TODO: generate month aria label
+      const ariaLabel = 'NO ARIA LABEL YET';  // i18n.getDayAriaLabel(newDate);
+
+      // marking date as disabled
+      let disabled = !!((minDate && newDate.before(minDate)) || (maxDate && newDate.after(maxDate)));
+      if (!disabled && markDisabled) {
+        disabled = markDisabled(newDate, {month: nextDate.month, year: grid.context.year});
+      }
+
+      // today
+      let today = newDate.equals(calendarToday);
+
+      // adding user-provided data to the context
+      let contextUserData =
+          dayTemplateData ? dayTemplateData(newDate, {month: nextDate.month, year: grid.context.year}) : undefined;
+
+      // saving first date of the month
+      if (grid.firstDate === null) {
+        grid.firstDate = newDate;
+      }
+
+      let monthObject = months[month];
+      if (!monthObject) {
+        monthObject = months[month] = {} as CellModel;
+      }
+      monthObject.date = newDate;
+      monthObject.context = Object.assign(monthObject.context || {}, {
+        $implicit: newDate,
+        date: newDate,
+        data: contextUserData,
+        currentYear: grid.context.year, disabled,
+        focused: false,
+        selected: false, today, zoom
+      });
+      monthObject.tabindex = -1;
+      monthObject.ariaLabel = ariaLabel;
+
+      date = nextDate;
+
+      if (newDate.year === grid.context.year && nextDate.year !== newDate.year) {
+        grid.lastDate = newDate;
+      }
+    }
+  }
+
+  return grid;
+}
+
+export function buildDecadeGrid(
+    calendar: NgbCalendar, date: NgbDate, state: DatepickerViewModel, i18n: NgbDatepickerI18n,
+    grid: GridModel = {} as GridModel): GridModel {
+  const {dayTemplateData, minDate, maxDate, markDisabled, zoom} = state;
+  const calendarToday = calendar.getToday();
+
+  grid.firstDate = <any>null;
+  grid.lastDate = <any>null;
+  grid.zoom = 'years';
+  grid.rows = grid.rows || [];
+  grid.context = {
+    year: date.year,
+  };
+
+  const[ROWS, COLUMNS] = calendar.getGridForZoom(date, grid.zoom);
+
+  date = getFirstViewYear(calendar, date);
+  grid.lastDate = calendar.getNext(date, 'y', COLUMNS * ROWS - 1);
+
+  // years has month rows
+  for (let row = 0; row < ROWS; row++) {
+    let rowObject = grid.rows[row];
+    if (!rowObject) {
+      rowObject = grid.rows[row] = {cells: []};
+    }
+    const months = rowObject.cells;
+
+    // row has months
+    for (let month = 0; month < COLUMNS; month++) {
+      const newDate = new NgbDate(date.year, date.month, date.day);
+      const nextDate = calendar.getNext(newDate, 'y', 1);
+
+      // TODO: generate month aria label
+      const ariaLabel = 'NO ARIA LABEL YET';  // i18n.getDayAriaLabel(newDate);
+
+      // marking date as disabled
+      let disabled = !!((minDate && newDate.before(minDate)) || (maxDate && newDate.after(maxDate)));
+      if (!disabled && markDisabled) {
+        disabled = markDisabled(newDate, {month: nextDate.month, year: grid.context.year});
+      }
+
+      // today
+      let today = newDate.equals(calendarToday);
+
+      // adding user-provided data to the context
+      let contextUserData =
+          dayTemplateData ? dayTemplateData(newDate, {month: nextDate.month, year: grid.context.year}) : undefined;
+
+      // saving first date of the month
+      if (grid.firstDate === null) {
+        grid.firstDate = newDate;
+      }
+
+      let monthObject = months[month];
+      if (!monthObject) {
+        monthObject = months[month] = {} as CellModel;
+      }
+      monthObject.date = newDate;
+      monthObject.context = Object.assign(monthObject.context || {}, {
+        $implicit: newDate,
+        date: newDate,
+        data: contextUserData,
+        currentYear: grid.context.year, disabled,
+        focused: false,
+        selected: false, today, zoom
+      });
+      monthObject.tabindex = -1;
+      monthObject.ariaLabel = ariaLabel;
+
+      date = nextDate;
+    }
+  }
+
+  return grid;
 }
 
 export function getFirstViewDate(calendar: NgbCalendar, date: NgbDate, firstDayOfWeek: number): NgbDate {
@@ -228,4 +420,23 @@ export function getFirstViewDate(calendar: NgbCalendar, date: NgbDate, firstDayO
   const firstMonthDate = new NgbDate(date.year, date.month, 1);
   const dayOfWeek = calendar.getWeekday(firstMonthDate) % daysPerWeek;
   return calendar.getPrev(firstMonthDate, 'd', (daysPerWeek + dayOfWeek - firstDayOfWeek) % daysPerWeek);
+}
+
+export function getFirstViewMonth(calendar: NgbCalendar, month: NgbDate): NgbDate {
+  let firstMonth = month, prevMonth = calendar.getPrev(month, 'm', 1);
+  while (firstMonth.year === prevMonth.year) {
+    firstMonth = prevMonth;
+    prevMonth = calendar.getPrev(firstMonth, 'm', 1);
+  }
+  return firstMonth;
+}
+
+export function getFirstViewYear(calendar: NgbCalendar, year: NgbDate): NgbDate {
+  let firstYear = year, prevYear = calendar.getPrev(year, 'y', 1);
+  const [rows, column] = calendar.getGridForZoom(firstYear, 'years');
+  while (firstYear.year % (rows * column) !== 0) {
+    firstYear = prevYear;
+    prevYear = calendar.getPrev(firstYear, 'y', 1);
+  }
+  return firstYear;
 }

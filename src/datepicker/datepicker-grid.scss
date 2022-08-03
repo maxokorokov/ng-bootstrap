@@ -1,33 +1,43 @@
-ngb-datepicker-month {
-  display: block;
+.ngb-dp-grid {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 20rem;
+  height: 20rem;
 }
 
 .ngb-dp {
   &-weekday,
   &-week-number {
-    line-height: 2rem;
-    text-align: center;
     font-style: italic;
   }
   &-weekday {
+    justify-content: center;
     color: var(--bs-info);
   }
-  &-week {
+  &-week-number {
+    justify-content: center;
+    align-items: center;
+  }
+  &-week, &-row {
     border-radius: 0.25rem;
     display: flex;
+    height: 100%;
   }
   &-weekdays {
     border-bottom: 1px solid var(--bs-border-color);
     border-radius: 0;
+    align-items: center;
     background-color: var(--bs-light);
   }
   &-day,
+  &-cell,
   &-weekday,
   &-week-number {
-    width: 2rem;
-    height: 2rem;
+    display: flex;
+    flex: 1;
   }
-  &-day {
+  &-day, &-cell:not(.ngb-dp-week-number, .ngb-dp-weekday) {
     cursor: pointer;
 
     &.disabled,

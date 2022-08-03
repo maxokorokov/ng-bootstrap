@@ -675,7 +675,7 @@ describe('ngb-datepicker-service', () => {
       it(`should throw if registers a month outside range`, () => {
         expect(() => {
           service.set({minDate: new NgbDate(2017, 5, 1)});
-          service.getMonth(new NgbDate(2015, 5, 1));
+          service.getGrid(new NgbDate(2015, 5, 1));
         }).toThrowError();
       });
 
