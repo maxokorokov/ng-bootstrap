@@ -1,21 +1,22 @@
-import { NgbCalendar } from './ngb-calendar';
+import { NgbCalendar, NgbDatepickerZoom } from './ngb-calendar';
 import { NgbDate } from './ngb-date';
 import { NgbDateStruct } from './ngb-date-struct';
-import { DatepickerViewModel, NgbDayTemplateData, NgbMarkDisabled } from './datepicker-view-model';
+import { DatepickerViewModel, GridModel, NgbDayTemplateData, NgbMarkDisabled } from './datepicker-view-model';
 import { Injectable } from '@angular/core';
-import { isInteger, toInteger } from '../util/util';
+import { isDefined, isInteger, toInteger } from '../util/util';
 import { Observable, Subject } from 'rxjs';
 import {
-	buildMonths,
+	buildGrids,
 	checkDateInRange,
 	checkMinBeforeMax,
 	generateSelectBoxMonths,
 	generateSelectBoxYears,
 	isChangedDate,
-	isChangedMonth,
 	isDateSelectable,
 	nextMonthDisabled,
 	prevMonthDisabled,
+	zoomIn,
+	zoomOut,
 } from './datepicker-tools';
 
 import { filter } from 'rxjs/operators';
@@ -31,9 +32,12 @@ export type DatepickerServiceInputs = Partial<{
 	markDisabled: NgbMarkDisabled;
 	maxDate: NgbDate | null;
 	minDate: NgbDate | null;
+	mode: NgbDatepickerZoom;
+	selection: 'day' | 'month';
 	navigation: 'select' | 'arrows' | 'none';
 	outsideDays: 'visible' | 'collapsed' | 'hidden';
 	weekdays: TranslationWidth | boolean;
+	zoom: NgbDatepickerZoom;
 }>;
 
 @Injectable()
@@ -85,6 +89,11 @@ export class NgbDatepickerService {
 				return { minDate };
 			}
 		},
+		mode: (mode: NgbDatepickerZoom) => {
+			if (this._state.mode !== mode) {
+				return { mode };
+			}
+		},
 		navigation: (navigation: 'select' | 'arrows' | 'none') => {
 			if (this._state.navigation !== navigation) {
 				return { navigation };
@@ -100,6 +109,11 @@ export class NgbDatepickerService {
 			const weekdaysVisible = weekdays === true || weekdays === false ? weekdays : true;
 			if (this._state.weekdayWidth !== weekdayWidth || this._state.weekdaysVisible !== weekdaysVisible) {
 				return { weekdayWidth, weekdaysVisible };
+			}
+		},
+		zoom: (zoom: NgbDatepickerZoom) => {
+			if (this._state.zoom !== zoom) {
+				return { zoom };
 			}
 		},
 	};
@@ -120,7 +134,8 @@ export class NgbDatepickerService {
 		lastDate: null,
 		focusDate: null,
 		focusVisible: false,
-		months: [],
+		grids: [],
+		mode: 'days',
 		navigation: 'select',
 		outsideDays: 'visible',
 		prevDisabled: false,
@@ -129,10 +144,11 @@ export class NgbDatepickerService {
 		selectBoxes: { years: [], months: [] },
 		weekdayWidth: TranslationWidth.Short,
 		weekdaysVisible: true,
+		zoom: 'days',
 	};
 
 	get model$(): Observable<DatepickerViewModel> {
-		return this._model$.pipe(filter((model) => model.months.length > 0));
+		return this._model$.pipe(filter((model) => model.grids.length > 0));
 	}
 
 	get dateSelect$(): Observable<NgbDate> {
@@ -160,19 +176,71 @@ export class NgbDatepickerService {
 
 	focusSelect() {
 		if (isDateSelectable(this._state.focusDate, this._state)) {
-			this.select(this._state.focusDate, { emitEvent: true });
+			if (this._state.zoom !== this._state.mode) {
+				this.zoomIn(this._state.focusDate);
+			} else {
+				this.select(this._state.focusDate, { emitEvent: true });
+			}
 		}
 	}
 
-	open(date?: NgbDate | null) {
-		const firstDate = this.toValidDate(date, this._calendar.getToday());
-		if (
-			firstDate != null &&
-			!this._state.disabled &&
-			(!this._state.firstDate || isChangedMonth(this._state.firstDate, firstDate))
-		) {
-			this._nextState({ firstDate });
+	zoomIn(date?: NgbDate | null) {
+		const zoomDate = this.toValidDate(date, null);
+		if (zoomDate) {
+			this.open(zoomDate, { zoom: zoomIn(this._state.zoom) });
 		}
+	}
+
+	zoomOut(date?: NgbDate | null) {
+		const zoomDate = this.toValidDate(date, null);
+		if (zoomDate) {
+			this.open(zoomDate, { zoom: zoomOut(this._state.zoom) });
+		}
+	}
+
+	open(date?: NgbDate | null, options: { zoom?: NgbDatepickerZoom } = {}) {
+		const firstDate = this.toValidDate(date, this._calendar.getToday());
+		if (firstDate != null && !this._state.disabled) {
+			if (isDefined(options.zoom) && options.zoom !== this._state.zoom) {
+				this._nextState({ firstDate, zoom: options.zoom });
+			} else {
+				this._nextState({ firstDate });
+			}
+		}
+	}
+
+	openNext() {
+		let { firstDate, zoom } = this._state;
+		switch (zoom) {
+			case 'days':
+				firstDate = this._calendar.getNext(firstDate!, 'm', 1);
+				break;
+			case 'months':
+				firstDate = this._calendar.getNext(firstDate!, 'y', 1);
+				break;
+			case 'years':
+				const [ROWS, COLUMNS] = this._calendar.getGridForZoom(firstDate!, 'years');
+				firstDate = this._calendar.getNext(firstDate!, 'y', ROWS * COLUMNS);
+				break;
+		}
+		this.open(firstDate);
+	}
+
+	openPrev() {
+		let { firstDate, zoom } = this._state;
+		switch (zoom) {
+			case 'days':
+				firstDate = this._calendar.getPrev(firstDate!, 'm', 1);
+				break;
+			case 'months':
+				firstDate = this._calendar.getPrev(firstDate!, 'y', 1);
+				break;
+			case 'years':
+				const [ROWS, COLUMNS] = this._calendar.getGridForZoom(firstDate!, 'years');
+				firstDate = this._calendar.getPrev(firstDate!, 'y', ROWS * COLUMNS);
+				break;
+		}
+		this.open(firstDate);
 	}
 
 	select(date?: NgbDate | null, options: { emitEvent?: boolean } = {}) {
@@ -196,13 +264,14 @@ export class NgbDatepickerService {
 		return this._calendar.isValid(ngbDate) ? ngbDate : defaultValue;
 	}
 
-	getMonth(struct: NgbDateStruct) {
-		for (let month of this._state.months) {
-			if (struct.month === month.number && struct.year === month.year) {
-				return month;
+	getGrid(date: NgbDateStruct): GridModel {
+		// TODO: works only for days ?? WTF is this error message???
+		for (let grid of this._state.grids) {
+			if (grid.zoom === 'days' && date.month === grid.context.month && date.year === grid.context.year) {
+				return grid;
 			}
 		}
-		throw new Error(`month ${struct.month} of year ${struct.year} not found`);
+		throw new Error(`month ${date.month} of year ${date.year} not found`);
 	}
 
 	private _nextState(patch: Partial<DatepickerViewModel>) {
@@ -213,37 +282,42 @@ export class NgbDatepickerService {
 	}
 
 	private _patchContexts(state: DatepickerViewModel) {
-		const { months, displayMonths, selectedDate, focusDate, focusVisible, disabled, outsideDays } = state;
-		state.months.forEach((month) => {
-			month.weeks.forEach((week) => {
-				week.days.forEach((day) => {
+		const { grids, displayMonths, selectedDate, focusDate, focusVisible, disabled, outsideDays, mode } = state;
+
+		state.grids.forEach((grid) => {
+			grid.rows.forEach((row) => {
+				row.cells.forEach((cell) => {
 					// patch focus flag
 					if (focusDate) {
-						day.context.focused = focusDate.equals(day.date) && focusVisible;
+						cell.context.focused = focusVisible && focusDate.equalsZoomed(grid.zoom, cell.date);
 					}
 
 					// calculating tabindex
-					day.tabindex =
-						!disabled && focusDate && day.date.equals(focusDate) && focusDate.month === month.number ? 0 : -1;
+					cell.tabindex = !disabled && focusDate && cell.date.equalsZoomed(grid.zoom, focusDate) ? 0 : -1;
+
+					// tabindex special case for days visible in adjacent months
+					if (grid.zoom === 'days' && focusDate?.month !== grid.context.month) {
+						cell.tabindex = -1;
+					}
 
 					// override context disabled
-					if (disabled === true) {
-						day.context.disabled = true;
+					if (disabled) {
+						cell.context.disabled = true;
 					}
 
 					// patch selection flag
-					if (selectedDate !== undefined) {
-						day.context.selected = selectedDate !== null && selectedDate.equals(day.date);
+					if (selectedDate !== undefined && mode === grid.zoom) {
+						cell.context.selected = selectedDate !== null && selectedDate.equalsZoomed(grid.zoom, cell.date);
 					}
 
 					// visibility
-					if (month.number !== day.date.month) {
-						day.hidden =
+					if (grid.zoom === 'days' && grid.context.month !== cell.date.month) {
+						cell.hidden =
 							outsideDays === 'hidden' ||
 							outsideDays === 'collapsed' ||
 							(displayMonths > 1 &&
-								day.date.after(months[0].firstDate) &&
-								day.date.before(months[displayMonths - 1].lastDate));
+								cell.date.after(grids[0].firstDate) &&
+								cell.date.before(grids[displayMonths - 1].lastDate));
 					}
 				});
 			});
@@ -270,7 +344,7 @@ export class NgbDatepickerService {
 		}
 
 		// initial rebuild via 'select()'
-		if ('selectedDate' in patch && this._state.months.length === 0) {
+		if ('selectedDate' in patch && this._state.grids.length === 0) {
 			startDate = state.selectedDate;
 		}
 
@@ -286,7 +360,7 @@ export class NgbDatepickerService {
 
 			// nothing to rebuild if only focus changed and it is still visible
 			if (
-				state.months.length !== 0 &&
+				state.grids.length !== 0 &&
 				state.focusDate &&
 				!state.focusDate.before(state.firstDate) &&
 				!state.focusDate.after(state.lastDate)
@@ -311,14 +385,22 @@ export class NgbDatepickerService {
 				'maxDate' in patch ||
 				'disabled' in patch ||
 				'outsideDays' in patch ||
-				'weekdaysVisible' in patch;
+				'weekdaysVisible' in patch ||
+				'zoom' in patch;
 
-			const months = buildMonths(this._calendar, startDate, state, this._i18n, forceRebuild);
+			const grids = buildGrids(
+				this._calendar,
+				startDate,
+				state,
+				this._i18n,
+				forceRebuild,
+				state.zoom !== this._state.zoom,
+			);
 
-			// updating months and boundary dates
-			state.months = months;
-			state.firstDate = months[0].firstDate;
-			state.lastDate = months[months.length - 1].lastDate;
+			// updating grids and boundary dates
+			state.grids = grids;
+			state.firstDate = grids[0].firstDate;
+			state.lastDate = grids[grids.length - 1].lastDate;
 
 			// reset selected date if 'markDisabled' returns true
 			if ('selectedDate' in patch && !isDateSelectable(state.selectedDate, state)) {

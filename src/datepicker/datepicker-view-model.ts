@@ -2,31 +2,67 @@ import { NgbDate } from './ngb-date';
 import { NgbDateStruct } from './ngb-date-struct';
 import { DayTemplateContext } from './datepicker-day-template-context';
 import { TranslationWidth } from '@angular/common';
+import { NgbDatepickerZoom } from './ngb-calendar';
+import { MonthTemplateContext } from './datepicker-month-template-context';
 
 export type NgbMarkDisabled = (date: NgbDateStruct, current?: { year: number; month: number }) => boolean;
 export type NgbDayTemplateData = (date: NgbDateStruct, current?: { year: number; month: number }) => any;
 
-export type DayViewModel = {
+export type CellModel = {
 	date: NgbDate;
-	context: DayTemplateContext;
+	context: DayTemplateContext | MonthTemplateContext;
 	tabindex: number;
 	ariaLabel: string;
 	hidden: boolean;
 };
 
-export type WeekViewModel = {
-	number: number;
-	days: DayViewModel[];
-	collapsed: boolean;
+export type RowWeekContext = {
+	week: number;
 };
 
+export type RowModel = {
+	cells: CellModel[];
+	context?: RowWeekContext;
+};
+
+export type GridMonthContext = {
+	month: number;
+	year: number;
+	weekdays: string[];
+};
+
+export type GridYearContext = {
+	year: number;
+};
+
+export type GridDecadeContext = {
+	year: number;
+};
+
+export type GridModel = MonthViewModel | YearViewModel | DecadeViewModel;
+
 export type MonthViewModel = {
+	zoom: 'days';
 	firstDate: NgbDate;
 	lastDate: NgbDate;
-	number: number;
-	year: number;
-	weeks: WeekViewModel[];
-	weekdays: string[];
+	context: GridMonthContext;
+	rows: RowModel[];
+};
+
+export type YearViewModel = {
+	zoom: 'months';
+	firstDate: NgbDate;
+	lastDate: NgbDate;
+	context: GridYearContext;
+	rows: RowModel[];
+};
+
+export type DecadeViewModel = {
+	zoom: 'years';
+	firstDate: NgbDate;
+	lastDate: NgbDate;
+	context: GridDecadeContext;
+	rows: RowModel[];
 };
 
 export type DatepickerViewModel = {
@@ -41,8 +77,9 @@ export type DatepickerViewModel = {
 	markDisabled: NgbMarkDisabled | null;
 	maxDate: NgbDate | null;
 	minDate: NgbDate | null;
-	months: MonthViewModel[];
-	navigation: 'select' | 'arrows' | 'none';
+	mode: NgbDatepickerZoom;
+	grids: GridModel[];
+	navigation: 'select' | 'arrows' | 'zoom' | 'none';
 	outsideDays: 'visible' | 'collapsed' | 'hidden';
 	prevDisabled: boolean;
 	nextDisabled: boolean;
@@ -53,6 +90,7 @@ export type DatepickerViewModel = {
 	selectedDate: NgbDate | null;
 	weekdayWidth: TranslationWidth;
 	weekdaysVisible: boolean;
+	zoom: NgbDatepickerZoom;
 };
 
 export enum NavigationEvent {

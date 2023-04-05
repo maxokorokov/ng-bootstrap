@@ -15,7 +15,6 @@ describe('ngb-datepicker-service', () => {
 	let selectDate: NgbDate;
 	let mockSelect: { onNext };
 	let focusMove: (NgbDate, NgbPeriod?, number?) => void;
-
 	let subscriptions: Subscription[];
 
 	const getWeek = (week: number, month = 0) => model.months[month].weeks[week];
@@ -672,7 +671,7 @@ describe('ngb-datepicker-service', () => {
 			it(`should throw if registers a month outside range`, () => {
 				expect(() => {
 					service.set({ minDate: new NgbDate(2017, 5, 1) });
-					service.getMonth(new NgbDate(2015, 5, 1));
+					service.getGrid(new NgbDate(2015, 5, 1));
 				}).toThrowError();
 			});
 

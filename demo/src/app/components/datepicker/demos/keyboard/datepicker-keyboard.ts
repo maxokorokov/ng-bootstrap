@@ -32,7 +32,7 @@ export class CustomKeyboardService extends NgbDatepickerKeyboardService {
 				dp.focusDate(event.altKey ? state.minDate : state.firstDate);
 				break;
 			default:
-				super.processKey(event, dp);
+				super.processKey(event, dp, 'months');
 				return;
 		}
 		event.preventDefault();

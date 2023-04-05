@@ -12,6 +12,7 @@ import { JsonPipe } from '@angular/common';
 export class NgbdDatepickerBasic {
 	model: NgbDateStruct;
 	date: { year: number; month: number };
+	wn = false;
 
 	constructor(private calendar: NgbCalendar) {}
 

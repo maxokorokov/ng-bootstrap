@@ -15,6 +15,7 @@ export function toJSDate(date: NgbDate) {
 }
 
 export type NgbPeriod = 'y' | 'm' | 'd';
+export type NgbDatepickerZoom = 'days' | 'months' | 'years';
 
 export function NGB_DATEPICKER_CALENDAR_FACTORY() {
 	return new NgbCalendarGregorian();
@@ -45,6 +46,16 @@ export abstract class NgbCalendar {
 	 */
 	abstract getWeeksPerMonth(): number;
 
+	getGridForZoom(date: NgbDate, zoom: 'days' | 'months' | 'years'): [number, number] {
+		switch (zoom) {
+			case 'days':
+				return [6, 7];
+			case 'months':
+				return [3, 4];
+			case 'years':
+				return [5, 4];
+		}
+	}
 	/**
 	 * Returns the weekday number for a given day.
 	 *

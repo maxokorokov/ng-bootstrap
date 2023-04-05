@@ -3,8 +3,13 @@ ngb-datepicker {
 	border-radius: 0.25rem;
 	display: inline-block;
 
-	&-month {
+	&-month,
+	&-grid {
 		pointer-events: auto;
+	}
+
+	&-grid {
+		border-top: 1px solid rgba(0, 0, 0, 0.125);
 	}
 
 	&.dropdown-menu {
@@ -36,7 +41,9 @@ ngb-datepicker {
 		display: flex;
 	}
 
-	&-month {
+	&-month,
+	&-year,
+	&-decade {
 		pointer-events: none;
 
 		&-name {
@@ -49,6 +56,8 @@ ngb-datepicker {
 
 		& + & {
 			.ngb-dp-month-name,
+			.ngb-dp-year-name,
+			.ngb-dp-decade-name,
 			.ngb-dp-week {
 				padding-left: 1rem;
 			}

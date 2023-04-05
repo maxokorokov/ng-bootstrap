@@ -77,6 +77,7 @@ export {
 	NgbDatepickerKeyboardService,
 	NgbDatepickerModule,
 	NgbDatepickerMonth,
+	NgbDatepickerGrid,
 	NgbDatepickerNavigateEvent,
 	NgbDatepickerState,
 	NgbDateStruct,

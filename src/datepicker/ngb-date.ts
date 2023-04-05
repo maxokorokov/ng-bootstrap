@@ -1,5 +1,6 @@
 import { NgbDateStruct } from './ngb-date-struct';
 import { isInteger } from '../util/util';
+import { NgbDatepickerZoom } from './ngb-calendar';
 
 /**
  * A simple class that represents a date that datepicker also uses internally.
@@ -57,6 +58,20 @@ export class NgbDate implements NgbDateStruct {
 	 */
 	equals(other?: NgbDateStruct | null): boolean {
 		return other != null && this.year === other.year && this.month === other.month && this.day === other.day;
+	}
+
+	/**
+	 * Checks is date is equal to another date for a given zoom level.
+	 */
+	equalsZoomed(zoom: NgbDatepickerZoom, other?: NgbDateStruct | null): boolean {
+		switch (zoom) {
+			case 'days':
+				return this.equals(other);
+			case 'months':
+				return other != null && this.year === other.year && this.month === other.month;
+			case 'years':
+				return other != null && this.year === other.year;
+		}
 	}
 
 	/**

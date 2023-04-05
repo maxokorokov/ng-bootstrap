@@ -23,12 +23,12 @@ import {
 	ViewEncapsulation,
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { NgFor, NgIf, NgTemplateOutlet, TranslationWidth } from '@angular/common';
+import { NgFor, NgForOf, NgIf, NgSwitch, NgSwitchCase, NgTemplateOutlet, TranslationWidth } from '@angular/common';
 
-import { NgbCalendar } from './ngb-calendar';
+import { NgbCalendar, NgbDatepickerZoom } from './ngb-calendar';
 import { NgbDate } from './ngb-date';
 import { DatepickerServiceInputs, NgbDatepickerService } from './datepicker-service';
-import { DatepickerViewModel, DayViewModel, MonthViewModel, NavigationEvent } from './datepicker-view-model';
+import { CellModel, DatepickerViewModel, GridModel, NavigationEvent } from './datepicker-view-model';
 import { DayTemplateContext } from './datepicker-day-template-context';
 import { NgbDatepickerConfig } from './datepicker-config';
 import { NgbDateAdapter } from './adapters/ngb-date-adapter';
@@ -37,7 +37,7 @@ import { NgbDatepickerI18n } from './datepicker-i18n';
 import { NgbDatepickerKeyboardService } from './datepicker-keyboard-service';
 import { isChangedDate, isChangedMonth } from './datepicker-tools';
 import { hasClassName } from '../util/util';
-import { NgbDatepickerDayView } from './datepicker-day-view';
+import { NgbDatepickerCell } from './datepicker-cell';
 import { NgbDatepickerNavigation } from './datepicker-navigation';
 
 /**
@@ -81,12 +81,19 @@ export interface NgbDatepickerState {
 	readonly maxDate: NgbDate | null;
 
 	/**
-	 * The first visible date of currently displayed months
+	 * Selection mode of the datepicker
+	 *
+	 * @since xxx
+	 */
+	readonly mode: 'days' | 'months' | 'years';
+
+	/**
+	 * The first visible date of currently displayed view
 	 */
 	readonly firstDate: NgbDate;
 
 	/**
-	 * The last visible date of currently displayed months
+	 * The last visible date of currently displayed view
 	 */
 	readonly lastDate: NgbDate;
 
@@ -96,11 +103,18 @@ export interface NgbDatepickerState {
 	readonly focusedDate: NgbDate;
 
 	/**
-	 * First dates of months currently displayed by the datepicker
+	 * First dates of views currently displayed by the datepicker
 	 *
 	 * @since 5.3.0
 	 */
-	readonly months: NgbDate[];
+	readonly views: NgbDate[];
+
+	/**
+	 * Zoom level of the datepicker
+	 *
+	 * @since xxx
+	 */
+	readonly zoom: 'days' | 'months' | 'years';
 }
 
 /**
@@ -111,6 +125,38 @@ export interface NgbDatepickerState {
 @Directive({ selector: 'ng-template[ngbDatepickerContent]', standalone: true })
 export class NgbDatepickerContent {
 	constructor(public templateRef: TemplateRef<any>) {}
+}
+
+@Directive({
+	selector: undefined,
+	standalone: true,
+	host: {
+		role: 'grid',
+		class: 'ngb-dp-grid',
+		'(keydown)': 'onKeyDown($event)',
+	},
+})
+export class NgbDatepickerGridCommon {
+	@Input() zoom: NgbDatepickerZoom;
+
+	constructor(
+		private _datepicker: NgbDatepicker,
+		private _service: NgbDatepickerService,
+		private _keyboardService: NgbDatepickerKeyboardService,
+	) {}
+
+	onKeyDown(event: KeyboardEvent) {
+		this._keyboardService.processKey(event, this._datepicker, this.zoom);
+	}
+
+	onClick(date: NgbDate) {
+		if (this._datepicker.state.mode === this.zoom) {
+			this._service.focus(date);
+			this._service.select(date, { emitEvent: true });
+		} else {
+			this._service.zoomIn(date);
+		}
+	}
 }
 
 /**
@@ -124,39 +170,39 @@ export class NgbDatepickerContent {
 @Component({
 	selector: 'ngb-datepicker-month',
 	standalone: true,
-	imports: [NgIf, NgFor, NgTemplateOutlet],
-	host: { role: 'grid', '(keydown)': 'onKeyDown($event)' },
+	imports: [NgIf, NgForOf, NgTemplateOutlet],
+	hostDirectives: [NgbDatepickerGridCommon],
 	encapsulation: ViewEncapsulation.None,
-	styleUrls: ['./datepicker-month.scss'],
+	styleUrls: ['./datepicker-grid.scss'],
 	template: `
-		<div *ngIf="viewModel.weekdays.length > 0" class="ngb-dp-week ngb-dp-weekdays" role="row">
-			<div *ngIf="datepicker.showWeekNumbers" class="ngb-dp-weekday ngb-dp-showweek small">{{
+		<div *ngIf="grid.context.weekdays.length > 0" class="ngb-dp-row ngb-dp-week ngb-dp-weekdays" role="row">
+			<div *ngIf="datepicker.showWeekNumbers" class="ngb-dp-cell ngb-dp-weekday ngb-dp-showweek small">{{
 				i18n.getWeekLabel()
 			}}</div>
-			<div *ngFor="let weekday of viewModel.weekdays" class="ngb-dp-weekday small" role="columnheader">{{
+			<div *ngFor="let weekday of grid.context.weekdays" class="ngb-dp-cell ngb-dp-weekday small" role="columnheader">{{
 				weekday
 			}}</div>
 		</div>
-		<ng-template ngFor let-week [ngForOf]="viewModel.weeks">
-			<div *ngIf="!week.collapsed" class="ngb-dp-week" role="row">
-				<div *ngIf="datepicker.showWeekNumbers" class="ngb-dp-week-number small text-muted">{{
-					i18n.getWeekNumerals(week.number)
+		<ng-template ngFor let-row [ngForOf]="grid.rows">
+			<div class="ngb-dp-row ngb-dp-week" role="row">
+				<div *ngIf="datepicker.showWeekNumbers" class="ngb-dp-cell ngb-dp-week-number small text-muted">{{
+					i18n.getWeekNumerals(row.context.week)
 				}}</div>
 				<div
-					*ngFor="let day of week.days"
-					(click)="doSelect(day); $event.preventDefault()"
-					class="ngb-dp-day"
+					*ngFor="let cell of row.cells"
+					(click)="onClick(cell); $event.preventDefault()"
+					class="ngb-dp-cell ngb-dp-day"
 					role="gridcell"
-					[class.disabled]="day.context.disabled"
-					[tabindex]="day.tabindex"
-					[class.hidden]="day.hidden"
-					[class.ngb-dp-today]="day.context.today"
-					[attr.aria-label]="day.ariaLabel"
+					[class.disabled]="cell.context.disabled"
+					[tabindex]="cell.tabindex"
+					[class.hidden]="cell.hidden"
+					[class.ngb-dp-today]="cell.context.today"
+					[attr.aria-label]="cell.ariaLabel"
 				>
-					<ng-template [ngIf]="!day.hidden">
+					<ng-template [ngIf]="!cell.hidden">
 						<ng-template
 							[ngTemplateOutlet]="datepicker.dayTemplate"
-							[ngTemplateOutletContext]="day.context"
+							[ngTemplateOutletContext]="cell.context"
 						></ng-template>
 					</ng-template>
 				</div>
@@ -173,26 +219,50 @@ export class NgbDatepickerMonth {
 	 */
 	@Input()
 	set month(month: NgbDateStruct) {
-		this.viewModel = this._service.getMonth(month);
+		this.grid = this._service.getGrid(month);
 	}
 
-	viewModel: MonthViewModel;
+	grid: GridModel;
 
 	constructor(
 		public i18n: NgbDatepickerI18n,
 		@Inject(forwardRef(() => NgbDatepicker)) public datepicker: NgbDatepicker,
-		private _keyboardService: NgbDatepickerKeyboardService,
 		private _service: NgbDatepickerService,
-	) {}
-
-	onKeyDown(event: KeyboardEvent) {
-		this._keyboardService.processKey(event, this.datepicker);
+		private _gridCommon: NgbDatepickerGridCommon,
+	) {
+		this._gridCommon.zoom = 'days';
 	}
 
-	doSelect(day: DayViewModel) {
-		if (!day.context.disabled && !day.hidden) {
-			this.datepicker.onDateSelect(day.date);
+	onClick(cell: CellModel) {
+		if (!cell.context.disabled && !cell.hidden) {
+			this._gridCommon.onClick(cell.date);
 		}
+	}
+}
+
+@Component({
+	selector: 'ngb-datepicker-grid',
+	standalone: true,
+	imports: [NgFor, NgTemplateOutlet],
+	hostDirectives: [{ directive: NgbDatepickerGridCommon, inputs: ['zoom'] }],
+	encapsulation: ViewEncapsulation.None,
+	styleUrls: ['./datepicker-grid.scss'],
+	template: `
+		<div class="ngb-dp-row" *ngFor="let row of grid.rows">
+			<div *ngFor="let cell of row.cells" class="ngb-dp-cell" [tabindex]="cell.tabindex" (click)="onClick(cell.date)">
+				<ng-template [ngTemplateOutlet]="datepicker.dayTemplate" [ngTemplateOutletContext]="cell.context"></ng-template>
+			</div>
+		</div>
+	`,
+})
+export class NgbDatepickerGrid {
+	@Input() grid: GridModel;
+	@Input() zoom: NgbDatepickerZoom;
+
+	constructor(public datepicker: NgbDatepicker, private _gridCommon: NgbDatepickerGridCommon) {}
+
+	onClick(date: NgbDate) {
+		this._gridCommon.onClick(date);
 	}
 }
 
@@ -205,52 +275,92 @@ export class NgbDatepickerMonth {
 	exportAs: 'ngbDatepicker',
 	selector: 'ngb-datepicker',
 	standalone: true,
-	imports: [NgIf, NgFor, NgTemplateOutlet, NgbDatepickerDayView, NgbDatepickerMonth, NgbDatepickerNavigation],
+	imports: [
+		NgIf,
+		NgFor,
+		NgTemplateOutlet,
+		NgbDatepickerCell,
+		NgbDatepickerMonth,
+		NgbDatepickerGrid,
+		NgSwitch,
+		NgSwitchCase,
+		NgbDatepickerNavigation,
+	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	encapsulation: ViewEncapsulation.None,
 	styleUrls: ['./datepicker.scss'],
 	host: { '[class.disabled]': 'model.disabled' },
 	template: `
 		<ng-template
-			#defaultDayTemplate
+			#defaultCellTemplate
 			let-date="date"
-			let-currentMonth="currentMonth"
+			let-parentDate="parentDate"
 			let-selected="selected"
 			let-disabled="disabled"
 			let-focused="focused"
+			let-zoom="zoom"
 		>
 			<div
-				ngbDatepickerDayView
+				ngbDatepickerCell
 				[date]="date"
-				[currentMonth]="currentMonth"
+				[parentDate]="parentDate"
 				[selected]="selected"
 				[disabled]="disabled"
 				[focused]="focused"
+				[zoom]="zoom"
 			>
 			</div>
 		</ng-template>
 
-		<ng-template #defaultContentTemplate>
-			<div *ngFor="let month of model.months; let i = index" class="ngb-dp-month">
-				<div *ngIf="navigation === 'none' || (displayMonths > 1 && navigation === 'select')" class="ngb-dp-month-name">
-					{{ i18n.getMonthLabel(month.firstDate) }}
+		<ng-template #defaultContentTemplate [ngSwitch]="model.zoom">
+			<ng-template ngSwitchCase="days">
+				<div *ngFor="let grid of model.grids; let i = index" class="ngb-dp-month">
+					<div
+						*ngIf="navigation === 'none' || (displayMonths > 1 && navigation === 'select')"
+						class="ngb-dp-month-name"
+					>
+						{{ i18n.getMonthLabel(grid.firstDate) }}
+					</div>
+					<ngb-datepicker-month [month]="grid.firstDate"></ngb-datepicker-month>
 				</div>
-				<ngb-datepicker-month [month]="month.firstDate"></ngb-datepicker-month>
-			</div>
+			</ng-template>
+
+			<ng-template ngSwitchCase="months">
+				<div *ngFor="let grid of model.grids" class="ngb-dp-year">
+					<div *ngIf="navigation === 'none' || (displayMonths > 1 && navigation === 'select')" class="ngb-dp-year-name">
+						{{ i18n.getYearNumerals(grid.firstDate.year) }}
+					</div>
+					<ngb-datepicker-grid [grid]="grid" zoom="months"></ngb-datepicker-grid>
+				</div>
+			</ng-template>
+
+			<ng-template ngSwitchCase="years">
+				<div *ngFor="let grid of model.grids" class="ngb-dp-decade">
+					<div
+						*ngIf="navigation === 'none' || (displayMonths > 1 && navigation === 'select')"
+						class="ngb-dp-decade-name"
+					>
+						{{ i18n.getYearNumerals(grid.firstDate.year) }}
+					</div>
+					<ngb-datepicker-grid [grid]="grid" zoom="years"></ngb-datepicker-grid>
+				</div>
+			</ng-template>
 		</ng-template>
 
 		<div class="ngb-dp-header">
 			<ngb-datepicker-navigation
 				*ngIf="navigation !== 'none'"
 				[date]="model.firstDate!"
-				[months]="model.months"
+				[grids]="model.grids"
 				[disabled]="model.disabled"
 				[showSelect]="model.navigation === 'select'"
 				[prevDisabled]="model.prevDisabled"
 				[nextDisabled]="model.nextDisabled"
 				[selectBoxes]="model.selectBoxes"
+				[zoom]="model.zoom"
 				(navigate)="onNavigateEvent($event)"
 				(select)="onNavigateDateSelect($event)"
+				(zoomOut)="zoomOut($event)"
 			>
 			</ngb-datepicker-navigation>
 		</div>
@@ -268,13 +378,15 @@ export class NgbDatepickerMonth {
 })
 export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnInit, ControlValueAccessor {
 	static ngAcceptInputType_autoClose: boolean | string;
+	static ngAcceptInputType_mode: string;
 	static ngAcceptInputType_navigation: string;
 	static ngAcceptInputType_outsideDays: string;
 	static ngAcceptInputType_weekdays: boolean | number;
+	static ngAcceptInputType_zoom: string;
 
 	model: DatepickerViewModel;
 
-	@ViewChild('defaultDayTemplate', { static: true }) private _defaultDayTemplate: TemplateRef<DayTemplateContext>;
+	@ViewChild('defaultCellTemplate', { static: true }) private _defaultCellTemplate: TemplateRef<DayTemplateContext>;
 	@ViewChild('content', { static: true }) private _contentEl: ElementRef<HTMLElement>;
 	@ContentChild(NgbDatepickerContent, { static: true }) contentTemplate?: NgbDatepickerContent;
 
@@ -369,6 +481,11 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 	@Input() showWeekNumbers: boolean;
 
 	/**
+	 * Which level should be selected
+	 */
+	@Input() mode: 'days' | 'months' | 'years';
+
+	/**
 	 * The date to open calendar with.
 	 *
 	 * With the default calendar we use ISO 8601: 'month' is 1=Jan ... 12=Dec.
@@ -388,6 +505,11 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 	 * @since 9.1.0
 	 */
 	@Input() weekdays: TranslationWidth | boolean;
+
+	/**
+	 * Zoom level defines what is currently displayed by the datepicker
+	 */
+	@Input() zoom: 'days' | 'months' | 'years';
 
 	/**
 	 * An event emitted right before the navigation happens and displayed month changes.
@@ -432,6 +554,8 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 			'showWeekNumbers',
 			'startDate',
 			'weekdays',
+			'mode',
+			'zoom',
 		].forEach((input) => (this[input] = config[input]));
 
 		_service.dateSelect$.pipe(takeUntil(this._destroyed$)).subscribe((date) => {
@@ -441,15 +565,20 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 		_service.model$.pipe(takeUntil(this._destroyed$)).subscribe((model) => {
 			const newDate = model.firstDate!;
 			const oldDate = this.model ? this.model.firstDate : null;
+			const oldZoom = this.model ? this.model.zoom : null;
+
+			console.log(model.zoom);
 
 			// update public state
 			this._publicState = {
 				maxDate: model.maxDate,
 				minDate: model.minDate,
+				mode: model.mode,
 				firstDate: model.firstDate!,
 				lastDate: model.lastDate!,
 				focusedDate: model.focusDate!,
-				months: model.months.map((viewModel) => viewModel.firstDate),
+				views: model.grids.map((grid) => grid.firstDate),
+				zoom: model.zoom,
 			};
 
 			let navigationPrevented = false;
@@ -482,7 +611,10 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 			}
 
 			// handling focus change
-			if (isChangedDate(newFocusedDate, oldFocusedDate) && oldFocusedDate && model.focusVisible) {
+			if (
+				((isChangedDate(newFocusedDate, oldFocusedDate) && oldFocusedDate) || this.model.zoom !== oldZoom) &&
+				model.focusVisible
+			) {
 				this.focus();
 			}
 
@@ -527,8 +659,9 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 			.asObservable()
 			.pipe(take(1))
 			.subscribe(() => {
-				const elementToFocus =
-					this._elementRef.nativeElement.querySelector<HTMLDivElement>('div.ngb-dp-day[tabindex="0"]');
+				const elementToFocus = this._elementRef.nativeElement.querySelector<HTMLDivElement>(
+					'div.ngb-dp-cell[tabindex="0"]',
+				);
 				if (elementToFocus) {
 					elementToFocus.focus();
 				}
@@ -560,15 +693,21 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 					filter(
 						({ target, relatedTarget }) =>
 							!(
-								hasClassName(target, 'ngb-dp-day') &&
-								hasClassName(relatedTarget, 'ngb-dp-day') &&
+								hasClassName(target, 'ngb-dp-cell') &&
+								hasClassName(relatedTarget, 'ngb-dp-cell') &&
 								nativeElement.contains(target as Node) &&
 								nativeElement.contains(relatedTarget as Node)
 							),
 					),
 					takeUntil(this._destroyed$),
 				)
-				.subscribe(({ type }) => this._ngZone.run(() => this._service.set({ focusVisible: type === 'focusin' })));
+				.subscribe(({ type }) =>
+					this._ngZone.run(() => {
+						// TODO: fuck, this should be done dependent on the click vs keyboard???!!!
+						console.log('FOCUS VISBILE', { focusVisible: type === 'focusin' });
+						this._service.set({ focusVisible: type === 'focusin' });
+					}),
+				);
 		});
 	}
 
@@ -589,13 +728,15 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 				'maxDate',
 				'outsideDays',
 				'weekdays',
+				'mode',
+				'zoom',
 			].forEach((name) => (inputs[name] = this[name]));
 			this._service.set(inputs);
 
 			this.navigateTo(this.startDate);
 		}
 		if (!this.dayTemplate) {
-			this.dayTemplate = this._defaultDayTemplate;
+			this.dayTemplate = this._defaultCellTemplate;
 		}
 	}
 
@@ -611,6 +752,8 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 			'maxDate',
 			'outsideDays',
 			'weekdays',
+			'mode',
+			'zoom',
 		]
 			.filter((name) => name in changes)
 			.forEach((name) => (inputs[name] = this[name]));
@@ -624,11 +767,6 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 		}
 	}
 
-	onDateSelect(date: NgbDate) {
-		this._service.focus(date);
-		this._service.select(date, { emitEvent: true });
-	}
-
 	onNavigateDateSelect(date: NgbDate) {
 		this._service.open(date);
 	}
@@ -636,10 +774,10 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 	onNavigateEvent(event: NavigationEvent) {
 		switch (event) {
 			case NavigationEvent.PREV:
-				this._service.open(this._calendar.getPrev(this.model.firstDate!, 'm', 1));
+				this._service.openPrev();
 				break;
 			case NavigationEvent.NEXT:
-				this._service.open(this._calendar.getNext(this.model.firstDate!, 'm', 1));
+				this._service.openNext();
 				break;
 		}
 	}
@@ -659,5 +797,10 @@ export class NgbDatepicker implements AfterViewInit, OnDestroy, OnChanges, OnIni
 	writeValue(value) {
 		this._controlValue = NgbDate.from(this._ngbDateAdapter.fromModel(value));
 		this._service.select(this._controlValue);
+	}
+
+	zoomOut(date: NgbDate) {
+		console.log('ZOOM OUT', date);
+		this._service.zoomOut(date);
 	}
 }

@@ -1,9 +1,15 @@
 import { NgModule } from '@angular/core';
-import { NgbDatepicker, NgbDatepickerContent } from './datepicker';
-import { NgbDatepickerMonth } from './datepicker';
+import { NgbDatepicker, NgbDatepickerContent, NgbDatepickerGrid, NgbDatepickerMonth } from './datepicker';
 import { NgbInputDatepicker } from './datepicker-input';
 
-export { NgbDatepicker, NgbDatepickerContent, NgbDatepickerNavigateEvent, NgbDatepickerState } from './datepicker';
+export {
+	NgbDatepicker,
+	NgbDatepickerContent,
+	NgbDatepickerNavigateEvent,
+	NgbDatepickerState,
+	NgbDatepickerMonth,
+	NgbDatepickerGrid,
+} from './datepicker';
 export { NgbInputDatepicker } from './datepicker-input';
 export { NgbCalendar, NgbPeriod, NgbCalendarGregorian } from './ngb-calendar';
 export { NgbCalendarIslamicCivil } from './hijri/ngb-calendar-islamic-civil';
@@ -12,8 +18,6 @@ export { NgbCalendarPersian } from './jalali/ngb-calendar-persian';
 export { NgbCalendarHebrew } from './hebrew/ngb-calendar-hebrew';
 export { NgbDatepickerI18nHebrew } from './hebrew/datepicker-i18n-hebrew';
 export { NgbCalendarBuddhist } from './buddhist/ngb-calendar-buddhist';
-export { NgbDatepickerMonth } from './datepicker';
-export { NgbDatepickerDayView } from './datepicker-day-view';
 export { NgbDatepickerNavigation } from './datepicker-navigation';
 export { NgbDatepickerNavigationSelect } from './datepicker-navigation-select';
 export { NgbDatepickerConfig } from './datepicker-config';
@@ -27,7 +31,13 @@ export { NgbDateNativeUTCAdapter } from './adapters/ngb-date-native-utc-adapter'
 export { NgbDateParserFormatter } from './ngb-date-parser-formatter';
 export { NgbDatepickerKeyboardService } from './datepicker-keyboard-service';
 
-const NGB_DATEPICKER_DIRECTIVES = [NgbDatepicker, NgbDatepickerContent, NgbInputDatepicker, NgbDatepickerMonth];
+const NGB_DATEPICKER_DIRECTIVES = [
+	NgbDatepicker,
+	NgbDatepickerContent,
+	NgbInputDatepicker,
+	NgbDatepickerMonth,
+	NgbDatepickerGrid,
+];
 
 @NgModule({
 	exports: NGB_DATEPICKER_DIRECTIVES,
