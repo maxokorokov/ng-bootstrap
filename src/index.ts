@@ -4,7 +4,6 @@ import { NgbAccordionModule } from './accordion/accordion.module';
 import { NgbAlertModule } from './alert/alert.module';
 import { NgbCarouselModule } from './carousel/carousel.module';
 import { NgbCollapseModule } from './collapse/collapse.module';
-import { NgbDatepickerModule } from './datepicker/datepicker.module';
 import { NgbDropdownModule } from './dropdown/dropdown.module';
 import { NgbModalModule } from './modal/modal.module';
 import { NgbNavModule } from './nav/nav.module';
@@ -18,6 +17,7 @@ import { NgbToastModule } from './toast/toast.module';
 import { NgbTooltipModule } from './tooltip/tooltip.module';
 import { NgbTypeaheadModule } from './typeahead/typeahead.module';
 import { NgbOffcanvasModule } from './offcanvas/offcanvas.module';
+import { NgbDatepickerModule } from './datepicker/signals/datepicker.module';
 
 export {
 	NgbAccordionDirective,
@@ -43,37 +43,32 @@ export {
 } from './carousel/carousel.module';
 export { NgbCollapse, NgbCollapseConfig, NgbCollapseModule } from './collapse/collapse.module';
 export {
-	NgbCalendar,
-	NgbCalendarEthiopian,
-	NgbCalendarGregorian,
-	NgbCalendarHebrew,
-	NgbCalendarIslamicCivil,
-	NgbCalendarIslamicUmalqura,
-	NgbCalendarPersian,
-	NgbCalendarBuddhist,
+	NgbDatepickerCalendar,
+	// NgbCalendarEthiopian,
+	// NgbCalendarGregorian,
+	// NgbCalendarHebrew,
+	// NgbCalendarIslamicCivil,
+	// NgbCalendarIslamicUmalqura,
+	// NgbCalendarPersian,
+	// NgbCalendarBuddhist,
 	NgbDate,
-	NgbDateAdapter,
-	NgbDateStructAdapter,
-	NgbDateNativeAdapter,
-	NgbDateNativeUTCAdapter,
-	NgbDateParserFormatter,
-	NgbDatepicker,
+	// NgbDateAdapter,
+	// NgbDateStructAdapter,
+	// NgbDateNativeAdapter,
+	// NgbDateNativeUTCAdapter,
+	// NgbDateParserFormatter,
+	NgbDatepickerComponent,
 	NgbDatepickerConfig,
-	NgbInputDatepickerConfig,
-	NgbDatepickerContent,
+	// NgbDatepickerContent,
 	NgbDatepickerI18n,
-	NgbDatepickerI18nAmharic,
+	// NgbDatepickerI18nAmharic,
 	NgbDatepickerI18nDefault,
-	NgbDatepickerI18nHebrew,
-	NgbDatepickerKeyboardService,
 	NgbDatepickerModule,
-	NgbDatepickerMonth,
-	NgbDatepickerNavigateEvent,
-	NgbDatepickerState,
+	// NgbDatepickerI18nHebrew,
+	// NgbDatepickerMonth,
 	NgbDateStruct,
-	NgbInputDatepicker,
 	NgbPeriod,
-} from './datepicker/datepicker.module';
+} from './datepicker/signals/datepicker.module';
 export {
 	NgbDropdown,
 	NgbDropdownAnchor,
